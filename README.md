@@ -71,8 +71,9 @@ Filter chạy trong **isolate riêng** (không lag UI), cache theo từng ảnh,
 
 ### 💥 Stickers & Speech Bubbles
 Catalog **13 sticker vector** vẽ bằng CustomPainter (không cần asset ảnh):
-- **Burst words**: POW!, BOOM!, WOW!, ZAP!, OMG!, YES! — ngôi sao bùng nổ 12 cánh
-- **Bong bóng thoại**: oval / rectangle / **cloud thought bubble** — **edit text trực tiếp**
+- **Burst words**: POW!, BOOM!, ZAP!, WOW!, OMG!, SNAP! — ngôi sao bùng nổ 12 cánh
+- **✍️ Burst TỰ VIẾT**: gõ action word riêng của bạn (auto uppercase kiểu comic) — ô đầu tiên trong hộp sticker
+- **Bong bóng thoại**: oval / rectangle / **cloud thought bubble** — **edit text trực tiếp** (burst cũng edit được)
 - **Shapes**: star, lightning bolt, heart, smiley
 
 Mỗi sticker trên canvas hỗ trợ full gesture:
@@ -105,10 +106,10 @@ Mỗi sticker trên canvas hỗ trợ full gesture:
 | <img src="docs/screenshots/04_layout_pip.png" width="220"/> | <img src="docs/screenshots/05_sticker_drag.png" width="220"/> | <img src="docs/screenshots/06_share.png" width="220"/> |
 | Panel nhỏ viền comic ở góc | Star sticker + selection box | Share sheet hệ thống thật |
 
-| Khung 1:1 |
-|---|
-| <img src="docs/screenshots/07_frame_aspect.png" width="220"/> |
-| Đổi aspect canvas live |
+| Khung 1:1 | Burst TỰ VIẾT | Hộp sticker |
+|---|---|---|
+| <img src="docs/screenshots/07_frame_aspect.png" width="220"/> | <img src="docs/screenshots/08_custom_burst.png" width="220"/> | <img src="docs/screenshots/09_sticker_picker.png" width="220"/> |
+| Đổi aspect canvas live | "dinh" → **DINH** auto uppercase | Catalog 13 sticker + ô TỰ VIẾT! |
 
 ---
 
@@ -189,7 +190,12 @@ flutter build ios           # iOS (cần macOS + Xcode)
 ## 🧪 Tests
 
 ```bash
-flutter test    # 30/30 passing
+flutter test                                    # 32 unit/widget tests passing
+
+# Integration test trên emulator/device thật (verify pinch/rotate sticker
+# bằng gesture multitouch — thứ không inject được qua adb):
+adb shell pm grant com.dantech0xff.duo_comic_camera android.permission.CAMERA
+flutter test integration_test -d <device>      # capture duo thật → pinch + rotate
 ```
 
 - `test/comic_filters_test.dart` — pixel math của từng filter (saturation, grayscale, sepia, vignette…)
@@ -216,7 +222,7 @@ flutter test    # 30/30 passing
 
 - [ ] Chụp **đồng thời** 2 camera trên thiết bị hỗ trợ multi-camera API
 - [ ] Video duo / GIF reaction
-- [ ] Thêm burst-word tự gõ text
+- [x] ~~Burst-word tự gõ text~~ ✅ v1.1
 - [ ] Template khung truyện tranh nhiều panel (3–4 ô)
 - [ ] CI build APK/IPA qua GitHub Actions
 
