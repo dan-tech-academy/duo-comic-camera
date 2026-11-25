@@ -6,7 +6,8 @@ plugins {
 
 android {
     namespace = "com.dantech0xff.duo_comic_camera"
-    compileSdk = flutter.compileSdkVersion
+    // permission_handler_android 13.x yêu cầu compileSdk >= 37.
+    compileSdk = maxOf(flutter.compileSdkVersion, 37)
     ndkVersion = flutter.ndkVersion
 
     compileOptions {

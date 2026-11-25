@@ -127,17 +127,46 @@ class _CaptureScreenState extends State<CaptureScreen> with WidgetsBindingObserv
     });
   }
 
-  CameraDescription _cameraFor(CameraLensDirection lens) => _cameras.firstWhere(
-        (c) => c.lensDirection == lens,
-        orElse: () => _cameras.first,
-      );
+  /// Tìm camera theo lens direction. Trả null nếu thiếu — TUYỆT ĐỐI không
+  /// thay thế bằng camera khác (một số device/emulator enumerate thiếu camera
+  /// thoáng qua, thay thế sai lens sẽ làm slot shot không bao giờ đầy).
+  CameraDescription? _cameraFor(CameraLensDirection lens) {
+    for (final c in _cameras) {
+      if (c.lensDirection == lens) return c;
+    }
+    return null;
+  }
+
+  /// Re-enumerate cameras (một số device trả list thiếu thoáng qua).
+  Future<void> _refreshCameras() async {
+    try {
+      _cameras = await availableCameras();
+    } catch (_) {}
+  }
+
+  void _showMissingCameraSnack(CameraLensDirection lens) {
+    if (!mounted) return;
+    final name = lens == CameraLensDirection.front ? 'trước' : 'sau';
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Không tìm thấy camera $name! Thử lại nhé.')),
+    );
+  }
 
   Future<void> _flip() async {
-    if (_currentLens == null || _cameras.length < 2) return;
+    if (_currentLens == null) return;
     final target = _currentLens == CameraLensDirection.back
         ? CameraLensDirection.front
         : CameraLensDirection.back;
-    await _initCamera(_cameraFor(target));
+    var desc = _cameraFor(target);
+    if (desc == null) {
+      await _refreshCameras();
+      desc = _cameraFor(target);
+    }
+    if (desc == null) {
+      _showMissingCameraSnack(target);
+      return;
+    }
+    await _initCamera(desc);
   }
 
   Future<void> _snap() async {
@@ -164,7 +193,16 @@ class _CaptureScreenState extends State<CaptureScreen> with WidgetsBindingObserv
             if (mounted) setState(() => _showBurst = false);
           }),
         );
-        await _initCamera(_cameraFor(missing));
+        var desc = _cameraFor(missing);
+        if (desc == null) {
+          await _refreshCameras();
+          desc = _cameraFor(missing);
+        }
+        if (desc == null) {
+          _showMissingCameraSnack(missing);
+          return;
+        }
+        await _initCamera(desc);
       }
     } catch (e) {
       if (mounted) {
@@ -204,7 +242,16 @@ class _CaptureScreenState extends State<CaptureScreen> with WidgetsBindingObserv
     });
     final needed = rear ? CameraLensDirection.back : CameraLensDirection.front;
     if (_currentLens != needed) {
-      await _initCamera(_cameraFor(needed));
+      var desc = _cameraFor(needed);
+      if (desc == null) {
+        await _refreshCameras();
+        desc = _cameraFor(needed);
+      }
+      if (desc == null) {
+        _showMissingCameraSnack(needed);
+        return;
+      }
+      await _initCamera(desc);
     }
   }
 
@@ -231,7 +278,7 @@ class _CaptureScreenState extends State<CaptureScreen> with WidgetsBindingObserv
               _TopBar(
                 flashMode: _flashMode,
                 onToggleFlash: _controller == null ? null : _toggleFlash,
-                onFlip: _cameras.length < 2 ? null : _flip,
+                onFlip: _controller == null ? null : _flip,
               ),
               Expanded(
                 child: Padding(
