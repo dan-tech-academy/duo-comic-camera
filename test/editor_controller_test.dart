@@ -162,14 +162,17 @@ void main() {
   test('redo bị vô hiệu kể cả khi throttle skip push', () async {
     final c = makeController();
     await c.init();
-    c.setLayout(DuoLayout.pipTopLeft);
+    c.setFilterIntensity(0.8); // push snapshot đầu tiên của op 'intensity'
     await c.undo();
     expect(c.canRedo, isTrue);
-    // 2 thao tác intensity liên tiếp trong <400ms: lần 2 bị throttle skip
-    // không push snapshot, nhưng redo vẫn phải bị clear vì state đã đổi.
-    c.setFilterIntensity(0.8);
+    // Trong <400ms và cùng op: lần này bị throttle skip — không push snapshot.
+    // Redo vẫn phải bị clear vì state đã đổi; nếu skip không clear thì redo
+    // sẽ overwrite edit mới.
     c.setFilterIntensity(0.6);
     expect(c.canRedo, isFalse);
+    // Skip không push snapshot mới — undo stack vẫn rỗng sau lần undo trên.
+    expect(c.canUndo, isFalse);
+    expect(c.filterIntensity, 0.6);
   });
 
   test('intensity render đúng tại bucket để pixel khớp cache key', () async {
@@ -233,7 +236,7 @@ void main() {
     c.setFilterIntensity(2.0);
     expect(c.filterIntensity, 1.0);
     c.setFilterIntensity(0.0);
-    expect(c.filterIntensity, 0.05);
+    expect(c.filterIntensity, 0.1); // min khớp granularity bucket 10%
     await c.setFilter(ComicFilterType.chill);
     c.setFilterIntensity(0.6);
     await Future.delayed(Duration.zero);
