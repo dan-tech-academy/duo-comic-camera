@@ -64,6 +64,7 @@ class EditorController extends ChangeNotifier {
   DateTime _lastHistoryPush = DateTime.fromMillisecondsSinceEpoch(0);
   String? _lastThrottledOp;
   String? _inFlightKey;
+  Future<void>? _inFlightFuture;
   int _processingCount = 0;
 
   bool get canUndo => _undo.isNotEmpty;
@@ -168,7 +169,7 @@ class EditorController extends ChangeNotifier {
   }
 
   void setFilterIntensity(double value) {
-    final v = value.clamp(0.05, 1.0);
+    final v = value.clamp(0.1, 1.0);
     if ((v - filterIntensity).abs() < 0.001) return;
     _pushHistory(throttle: true, op: 'intensity');
     filterIntensity = v;
@@ -190,10 +191,19 @@ class EditorController extends ChangeNotifier {
       notifyListeners();
       return;
     }
-    // Job y hệt đang chạy rồi — không spawn thêm isolate trong cùng bucket.
+    // Job y hệt đang chạy rồi — không spawn thêm isolate trong cùng bucket;
+    // trả future của job đang chạy để caller await đúng lúc hoàn tất.
     final requestKey = '${type.name}_$bucket';
-    if (_inFlightKey == requestKey) return;
+    if (_inFlightKey == requestKey && _inFlightFuture != null) {
+      return _inFlightFuture!;
+    }
     _inFlightKey = requestKey;
+    final future = _runFilterJobs(type, bucket, requestKey);
+    _inFlightFuture = future;
+    return future;
+  }
+
+  Future<void> _runFilterJobs(ComicFilterType type, int bucket, String requestKey) async {
     _processingCount++;
     processing = true;
     notifyListeners();
@@ -223,7 +233,10 @@ class EditorController extends ChangeNotifier {
         _frontResult = results[1];
       }
     } finally {
-      if (_inFlightKey == requestKey) _inFlightKey = null;
+      if (_inFlightKey == requestKey) {
+        _inFlightKey = null;
+        _inFlightFuture = null;
+      }
       _processingCount--;
       processing = _processingCount > 0;
       notifyListeners();
@@ -287,7 +300,9 @@ class EditorController extends ChangeNotifier {
   }
 
   void moveSticker(String id, Offset center) {
-    _pushHistory(throttle: true, op: 'move');
+    // Scale gesture xen kẽ move+transform mỗi frame — cùng op key 'sticker'
+    // để throttle không bị bypass bởi việc luân phiên 2 hàm.
+    _pushHistory(throttle: true, op: 'sticker');
     final s = stickers.firstWhere((e) => e.id == id);
     s.center = Offset(
       center.dx.clamp(-0.1, 1.1),
@@ -297,7 +312,7 @@ class EditorController extends ChangeNotifier {
   }
 
   void transformSticker(String id, {required double scale, required double rotation}) {
-    _pushHistory(throttle: true, op: 'transform');
+    _pushHistory(throttle: true, op: 'sticker');
     final s = stickers.firstWhere((e) => e.id == id);
     s.scale = scale.clamp(StickerPlacement.minScale, StickerPlacement.maxScale);
     s.rotation = rotation;

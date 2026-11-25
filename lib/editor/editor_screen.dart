@@ -72,7 +72,11 @@ class _EditorScreenState extends State<EditorScreen> {
       await WidgetsBinding.instance.endOfFrame;
       waited++;
     }
-    await WidgetsBinding.instance.endOfFrame;
+    // Image.memory decode async: chờ thêm vài frame để ảnh mới decode xong
+    // vào canvas trước khi capture (gaplessPlayback giữ pixel cũ trong lúc decode).
+    for (var i = 0; i < 3; i++) {
+      await WidgetsBinding.instance.endOfFrame;
+    }
     try {
       final bytes = await Exporter.capturePng(_boundaryKey);
       await action(bytes);
@@ -103,17 +107,29 @@ class _EditorScreenState extends State<EditorScreen> {
 
   /// Capture canvas → encode GIF comic (zoom-punch luân phiên 2 panel) → lưu gallery.
   Future<void> _saveGif() => _runExport((pngBytes) async {
-        final regions = computeRegions(
-          const Size(1000, 1000),
-          _controller.layout,
-          _controller.splitRatio,
-        );
-        final fa = regions.firstRect.center;
-        final fb = regions.secondRect.center;
+        (double, double) focusA;
+        (double, double) focusB;
+        if (layoutInfoOf(_controller.layout).isDiagonal) {
+          // Layout chéo: 2 panel cùng phủ khung (khác nhau ở clip tam giác)
+          // nên rect.center trùng nhau — zoom về centroid của từng tam giác.
+          final slash = _controller.layout == DuoLayout.diagonalSlash;
+          focusA = slash ? (1 / 3, 1 / 3) : (2 / 3, 1 / 3);
+          focusB = slash ? (2 / 3, 2 / 3) : (1 / 3, 2 / 3);
+        } else {
+          final regions = computeRegions(
+            const Size(1000, 1000),
+            _controller.layout,
+            _controller.splitRatio,
+          );
+          final fa = regions.firstRect.center;
+          final fb = regions.secondRect.center;
+          focusA = (fa.dx / 1000, fa.dy / 1000);
+          focusB = (fb.dx / 1000, fb.dy / 1000);
+        }
         final gif = await encodeComicGif(GifJob(
           pngBytes: pngBytes,
-          focusA: (fa.dx / 1000, fa.dy / 1000),
-          focusB: (fb.dx / 1000, fb.dy / 1000),
+          focusA: focusA,
+          focusB: focusB,
         ));
         await Exporter.saveToGallery(gif, ext: '.gif');
       }, 'GIF COMIC ĐÃ LƯU!');
@@ -532,7 +548,7 @@ class _FilterPanel extends StatelessWidget {
                       ),
                       child: Slider(
                         value: controller.filterIntensity,
-                        min: 0.05,
+                        min: 0.1, // khớp granularity bucket 10% của cache
                         max: 1.0,
                         activeColor: ComicColors.red,
                         inactiveColor: ComicColors.paper,
