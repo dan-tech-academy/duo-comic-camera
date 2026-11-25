@@ -37,6 +37,15 @@ class EditorController extends ChangeNotifier {
   String? selectedStickerId;
   int _stickerCounter = 0;
 
+  /// Khi true, chrome chọn sticker (khung xanh + nút edit/xoá) bị ẩn —
+  /// dùng trong lúc export để UI edit không lọt vào ảnh PNG.
+  bool exportMode = false;
+
+  void setExportMode(bool value) {
+    exportMode = value;
+    notifyListeners();
+  }
+
   final Map<String, FilterResult> _cache = {};
   FilterResult? _rearResult;
   FilterResult? _frontResult;

@@ -81,6 +81,29 @@ void main() {
     expect(find.text('1 sticker'), findsOneWidget);
   });
 
+  testWidgets('exportMode ẩn chrome chọn sticker khỏi canvas', (tester) async {
+    await tester.pumpWidget(buildEditor());
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Sticker'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('MỞ HỘP STICKER!'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('POW!'));
+    await tester.pumpAndSettle();
+    // Sticker mới được auto-select → nút xoá hiện trên canvas.
+    expect(find.byIcon(Icons.close), findsOneWidget);
+
+    final controller = (tester.state(find.byType(EditorScreen)) as dynamic)
+        .controller as dynamic;
+    controller.setExportMode(true);
+    await tester.pump();
+    expect(find.byIcon(Icons.close), findsNothing);
+
+    controller.setExportMode(false);
+    await tester.pump();
+    expect(find.byIcon(Icons.close), findsOneWidget);
+  });
+
   testWidgets('đổi khung aspect', (tester) async {
     await tester.pumpWidget(buildEditor());
     await tester.pumpAndSettle();

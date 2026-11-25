@@ -136,7 +136,8 @@ class _StickerViewState extends State<_StickerView> {
 
   @override
   Widget build(BuildContext context) {
-    final selected = widget.controller.selectedStickerId == placement.id;
+    final selected = widget.controller.selectedStickerId == placement.id &&
+        !widget.controller.exportMode;
     final art = selected
         ? Stack(
             clipBehavior: Clip.none,
@@ -148,9 +149,12 @@ class _StickerViewState extends State<_StickerView> {
                 ),
                 child: StickerArt(spec: placement.spec),
               ),
+              // Badge đặt lùi vào trong (-4) thay vì nhô ra ngoài (-16):
+              // tâm badge nằm trong bounds của sticker nên hit-test chạm được
+              // đúng vị trí hiển thị.
               Positioned(
-                top: -16,
-                right: -16,
+                top: -4,
+                right: -4,
                 child: _Badge(
                   icon: Icons.close,
                   color: ComicColors.red,
@@ -159,8 +163,8 @@ class _StickerViewState extends State<_StickerView> {
               ),
               if (_isBubble)
                 Positioned(
-                  top: -16,
-                  left: -16,
+                  top: -4,
+                  left: -4,
                   child: _Badge(
                     icon: Icons.edit,
                     color: ComicColors.blue,
