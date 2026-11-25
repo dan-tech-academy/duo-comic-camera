@@ -47,5 +47,20 @@ void main() {
       expect(decoded.numFrames, 4);
       expect(decoded.width, 480);
     });
+
+    test('portrait: cạnh dài là height — không vượt maxDim', () async {
+      final src = img.Image(width: 400, height: 800);
+      img.fill(src, color: img.ColorRgb8(80, 160, 200));
+      final gif = await encodeComicGif(GifJob(
+        pngBytes: img.encodePng(src),
+        focusA: (0.5, 0.3),
+        focusB: (0.5, 0.7),
+        frames: 4,
+        maxDim: 480,
+      ));
+      final decoded = img.decodeGif(gif)!;
+      expect(decoded.height, 480);
+      expect(decoded.width, 240);
+    });
   });
 }

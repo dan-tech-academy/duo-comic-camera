@@ -505,6 +505,9 @@ class _LayoutMiniPainter extends CustomPainter {
 
     fillRegion(regions.firstRect, regions.firstClip, red);
     fillRegion(regions.secondRect, regions.secondClip, blue);
+    for (final (rect, useFirst) in regions.extraCells) {
+      canvas.drawRect(rect, useFirst ? red : blue);
+    }
     if (layoutInfoOf(layout).isPip) {
       canvas.drawRect(regions.secondRect.deflate(0.75), ink);
     }

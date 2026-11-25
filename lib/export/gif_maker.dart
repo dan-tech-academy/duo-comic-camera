@@ -35,14 +35,18 @@ class GifJob {
 /// Encode trong isolate để không drop frame UI.
 Future<Uint8List> encodeComicGif(GifJob job) => Isolate.run(() => _encode(job));
 
-/// GIF comic: nhịp zoom-punch (scale 1.00..1.08, 2 nhịp mỗi loop) luân phiên
-/// focus giữa 2 panel + shake ngang nhỏ — cảm giác "hoạt hình truyện tranh".
+/// GIF comic: pulse zoom mượt (1.00..1.08) + focus luân phiên giữa 2 panel
+/// mỗi frame + shake ngang nhỏ — cảm giác "hoạt hình truyện tranh".
 Uint8List _encode(GifJob job) {
   final src = img.decodePng(job.pngBytes);
   if (src == null) throw StateError('PNG không hợp lệ');
-  final base = (src.width > job.maxDim || src.height > job.maxDim)
-      ? img.copyResize(src, width: job.maxDim)
-      : src.clone();
+  // Resize theo cạnh DÀI — cả portrait lẫn landscape đều <= maxDim.
+  img.Image base = src.clone();
+  if (src.width > job.maxDim || src.height > job.maxDim) {
+    base = src.width >= src.height
+        ? img.copyResize(src, width: job.maxDim)
+        : img.copyResize(src, height: job.maxDim);
+  }
   final w = base.width;
   final h = base.height;
 
@@ -54,8 +58,9 @@ Uint8List _encode(GifJob job) {
   );
 
   for (var i = 0; i < job.frames; i++) {
-    // 2 nhịp punch mỗi loop: sin(4πi/frames) qua 2 chu kỳ.
-    final zoom = 1.04 + 0.04 * math.sin(4 * math.pi * i / job.frames);
+    // Pulse mượt 1 chu kỳ/loop — cả 2 panel đều trải qua đỉnh zoom 1.08 và
+    // đáy 1.00 (sin chu kỳ = frames, không sync với parity của focus switch).
+    final zoom = 1.04 + 0.04 * math.sin(2 * math.pi * i / job.frames);
     final focus = i.isEven ? job.focusA : job.focusB;
     final shakeX = (i.isEven ? 1 : -1) * 0.012; // lắc nhẹ ±1.2% chiều rộng
     final sw = math.max(w, (w * zoom).round());
