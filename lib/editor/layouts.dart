@@ -12,16 +12,23 @@ enum DuoLayout {
   pipTopRight,
   pipBottomLeft,
   pipBottomRight,
+  comicPage3,
+  comicPage4,
 }
 
 class DuoLayoutInfo {
-  const DuoLayoutInfo(this.layout, this.label, {this.isPip = false, this.isDiagonal = false, this.isSplit = false});
+  const DuoLayoutInfo(this.layout, this.label,
+      {this.isPip = false,
+      this.isDiagonal = false,
+      this.isSplit = false,
+      this.isComicPage = false});
 
   final DuoLayout layout;
   final String label;
   final bool isPip;
   final bool isDiagonal;
   final bool isSplit;
+  final bool isComicPage;
 }
 
 const List<DuoLayoutInfo> kDuoLayouts = [
@@ -33,6 +40,8 @@ const List<DuoLayoutInfo> kDuoLayouts = [
   DuoLayoutInfo(DuoLayout.pipTopRight, 'PiP phải trên', isPip: true),
   DuoLayoutInfo(DuoLayout.pipBottomLeft, 'PiP trái dưới', isPip: true),
   DuoLayoutInfo(DuoLayout.pipBottomRight, 'PiP phải dưới', isPip: true),
+  DuoLayoutInfo(DuoLayout.comicPage3, 'Truyện 3 ô', isComicPage: true),
+  DuoLayoutInfo(DuoLayout.comicPage4, 'Truyện 4 ô', isComicPage: true),
 ];
 
 DuoLayoutInfo layoutInfoOf(DuoLayout layout) =>
@@ -63,6 +72,7 @@ class DuoRegions {
     this.firstClip,
     this.secondClip,
     this.divider,
+    this.extraCells = const [],
   });
 
   final Rect firstRect;
@@ -70,6 +80,10 @@ class DuoRegions {
   final Path? firstClip;
   final Path? secondClip;
   final List<Offset>? divider;
+
+  /// Panel phụ của template truyện tranh nhiều ô: (rect, true = ảnh thứ nhất).
+  /// firstRect/secondRect vẫn là 2 ô chính chứa ảnh sau/trước.
+  final List<(Rect, bool)> extraCells;
 }
 
 /// Tính vùng cho từng layout. [ratio] (0.3..0.7) chỉ áp dụng cho split.
@@ -147,6 +161,32 @@ DuoRegions computeRegions(Size size, DuoLayout layout, double ratio) {
       return DuoRegions(
         firstRect: full,
         secondRect: Rect.fromLTWH(dx, dy, insetW, insetH),
+      );
+    case DuoLayout.comicPage3:
+      // Ô wide-shot trên (ảnh sau), dưới: close-up cam trước trái + crop ảnh sau phải.
+      const g = 10.0; // gutter trắng giữa các ô
+      final topH = h * 0.55;
+      final bw = (w - g) / 2;
+      final bottomH = h - topH - g;
+      return DuoRegions(
+        firstRect: Rect.fromLTWH(0, 0, w, topH),
+        secondRect: Rect.fromLTWH(0, topH + g, bw, bottomH),
+        extraCells: [
+          (Rect.fromLTWH(bw + g, topH + g, bw, bottomH), true),
+        ],
+      );
+    case DuoLayout.comicPage4:
+      // Lưới 2x2 so le: sau-trái-trên / trước-phải-trên / trước-trái-dưới / sau-phải-dưới.
+      const g = 10.0;
+      final cw = (w - g) / 2;
+      final ch = (h - g) / 2;
+      return DuoRegions(
+        firstRect: Rect.fromLTWH(0, 0, cw, ch),
+        secondRect: Rect.fromLTWH(cw + g, 0, cw, ch),
+        extraCells: [
+          (Rect.fromLTWH(0, ch + g, cw, ch), false),
+          (Rect.fromLTWH(cw + g, ch + g, cw, ch), true),
+        ],
       );
   }
 }

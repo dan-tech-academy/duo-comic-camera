@@ -123,5 +123,47 @@ void main() {
         throwsArgumentError,
       );
     });
+
+    test('intensity 0.5 blend nửa gốc nửa filter', () {
+      final im = img.Image(width: 8, height: 8);
+      for (final p in im) {
+        p.r = 100;
+        p.g = 100;
+        p.b = 100;
+      }
+      final bytes = img.encodePng(im);
+
+      final full = processPhoto(FilterJob(
+        bytes: bytes,
+        maxDim: 8,
+        filter: ComicFilterType.chill,
+        intensity: 1.0,
+      ));
+      final half = processPhoto(FilterJob(
+        bytes: bytes,
+        maxDim: 8,
+        filter: ComicFilterType.chill,
+        intensity: 0.5,
+      ));
+      final zero = processPhoto(FilterJob(
+        bytes: bytes,
+        maxDim: 8,
+        filter: ComicFilterType.chill,
+        intensity: 0.05,
+      ));
+
+      final fullImg = img.decodePng(full.pngBytes)!;
+      final halfImg = img.decodePng(half.pngBytes)!;
+      final zeroImg = img.decodePng(zero.pngBytes)!;
+
+      // chill: r *= 0.82 → full filter r ≈ 82, gốc r = 100.
+      final rFull = fullImg.getPixel(4, 4).r;
+      final rHalf = halfImg.getPixel(4, 4).r;
+      final rZero = zeroImg.getPixel(4, 4).r;
+      expect(rFull, lessThan(90));
+      expect(rHalf, inInclusiveRange(88, 96));
+      expect(rZero, greaterThan(95)); // intensity thấp → gần ảnh gốc
+    });
   });
 }
+

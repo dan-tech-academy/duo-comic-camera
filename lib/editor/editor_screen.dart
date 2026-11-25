@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 
 import '../export/exporter.dart';
+import '../export/gif_maker.dart';
 import '../theme/comic_theme.dart';
 import 'duo_canvas.dart';
 import 'editor_controller.dart';
@@ -64,7 +65,18 @@ class _EditorScreenState extends State<EditorScreen> {
     // Ẩn chrome chọn sticker (khung xanh + badge) trước khi capture để
     // UI edit không bị bake vào ảnh export; chờ 1 frame cho canvas render lại.
     _controller.setExportMode(true);
-    await WidgetsBinding.instance.endOfFrame;
+    // Nếu filter đang xử lý (ví dụ vừa kéo slider intensity), chờ xong để
+    // capture đúng pixels mới nhất — không export ảnh của strength cũ.
+    var waited = 0;
+    while (_controller.processing && waited < 300) {
+      await WidgetsBinding.instance.endOfFrame;
+      waited++;
+    }
+    // Image.memory decode async: chờ thêm vài frame để ảnh mới decode xong
+    // vào canvas trước khi capture (gaplessPlayback giữ pixel cũ trong lúc decode).
+    for (var i = 0; i < 3; i++) {
+      await WidgetsBinding.instance.endOfFrame;
+    }
     try {
       final bytes = await Exporter.capturePng(_boundaryKey);
       await action(bytes);
@@ -93,6 +105,35 @@ class _EditorScreenState extends State<EditorScreen> {
         'ĐÃ MỞ SHARE SHEET!',
       );
 
+  /// Capture canvas → encode GIF comic (zoom-punch luân phiên 2 panel) → lưu gallery.
+  Future<void> _saveGif() => _runExport((pngBytes) async {
+        (double, double) focusA;
+        (double, double) focusB;
+        if (layoutInfoOf(_controller.layout).isDiagonal) {
+          // Layout chéo: 2 panel cùng phủ khung (khác nhau ở clip tam giác)
+          // nên rect.center trùng nhau — zoom về centroid của từng tam giác.
+          final slash = _controller.layout == DuoLayout.diagonalSlash;
+          focusA = slash ? (1 / 3, 1 / 3) : (2 / 3, 1 / 3);
+          focusB = slash ? (2 / 3, 2 / 3) : (1 / 3, 2 / 3);
+        } else {
+          final regions = computeRegions(
+            const Size(1000, 1000),
+            _controller.layout,
+            _controller.splitRatio,
+          );
+          final fa = regions.firstRect.center;
+          final fb = regions.secondRect.center;
+          focusA = (fa.dx / 1000, fa.dy / 1000);
+          focusB = (fb.dx / 1000, fb.dy / 1000);
+        }
+        final gif = await encodeComicGif(GifJob(
+          pngBytes: pngBytes,
+          focusA: focusA,
+          focusB: focusB,
+        ));
+        await Exporter.saveToGallery(gif, ext: '.gif');
+      }, 'GIF COMIC ĐÃ LƯU!');
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -104,6 +145,26 @@ class _EditorScreenState extends State<EditorScreen> {
         ),
         title: Text('DUO COMIC!', style: ComicTheme.actionWord(size: 30)),
         centerTitle: true,
+        actions: [
+          AnimatedBuilder(
+            animation: _controller,
+            builder: (context, _) => Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                IconButton(
+                  icon: const Icon(Icons.undo, color: ComicColors.ink),
+                  tooltip: 'Hoàn tác',
+                  onPressed: _controller.canUndo ? _controller.undo : null,
+                ),
+                IconButton(
+                  icon: const Icon(Icons.redo, color: ComicColors.ink),
+                  tooltip: 'Làm lại',
+                  onPressed: _controller.canRedo ? _controller.redo : null,
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
       body: HalftoneBackground(
         child: SafeArea(
@@ -165,14 +226,25 @@ class _EditorScreenState extends State<EditorScreen> {
                         child: ComicButton(
                           label: 'Save!',
                           color: ComicColors.yellow,
+                          fontSize: 17,
                           onPressed: _exporting ? null : _save,
                         ),
                       ),
-                      const SizedBox(width: 14),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: ComicButton(
+                          label: 'GIF!',
+                          color: ComicColors.pink,
+                          fontSize: 17,
+                          onPressed: _exporting ? null : _saveGif,
+                        ),
+                      ),
+                      const SizedBox(width: 10),
                       Expanded(
                         child: ComicButton(
                           label: 'Share!',
                           color: ComicColors.cyan,
+                          fontSize: 17,
                           onPressed: _exporting ? null : _share,
                         ),
                       ),
@@ -433,6 +505,9 @@ class _LayoutMiniPainter extends CustomPainter {
 
     fillRegion(regions.firstRect, regions.firstClip, red);
     fillRegion(regions.secondRect, regions.secondClip, blue);
+    for (final (rect, useFirst) in regions.extraCells) {
+      canvas.drawRect(rect, useFirst ? red : blue);
+    }
     if (layoutInfoOf(layout).isPip) {
       canvas.drawRect(regions.secondRect.deflate(0.75), ink);
     }
@@ -450,10 +525,49 @@ class _FilterPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ListView(
-      scrollDirection: Axis.horizontal,
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+    final showIntensity = controller.filter != ComicFilterType.none;
+    return Column(
       children: [
+        if (showIntensity)
+          SizedBox(
+            height: 30,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Row(
+                children: [
+                  Text(
+                    'ĐỘ MẠNH ${(controller.filterIntensity * 100).round()}%',
+                    style: const TextStyle(
+                      fontFamily: ComicTheme.bodyFont,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 11,
+                    ),
+                  ),
+                  Expanded(
+                    child: SliderTheme(
+                      data: const SliderThemeData(
+                        trackHeight: 5,
+                        thumbShape: RoundSliderThumbShape(enabledThumbRadius: 7),
+                      ),
+                      child: Slider(
+                        value: controller.filterIntensity,
+                        min: 0.1, // khớp granularity bucket 10% của cache
+                        max: 1.0,
+                        activeColor: ComicColors.red,
+                        inactiveColor: ComicColors.paper,
+                        onChanged: controller.setFilterIntensity,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        Expanded(
+          child: ListView(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            children: [
         for (final filter in kComicFilters)
           GestureDetector(
             onTap: () => controller.setFilter(filter.type),
@@ -493,6 +607,9 @@ class _FilterPanel extends StatelessWidget {
               ),
             ),
           ),
+            ],
+          ),
+        ),
       ],
     );
   }
@@ -531,12 +648,7 @@ class _StickerPanel extends StatelessWidget {
               ),
               if (count > 0)
                 TextButton(
-                  onPressed: () {
-                    final ids = controller.stickers.map((s) => s.id).toList();
-                    for (final id in ids) {
-                      controller.removeSticker(id);
-                    }
-                  },
+                  onPressed: controller.clearStickers,
                   child: const Text(
                     'Xoá hết',
                     style: TextStyle(

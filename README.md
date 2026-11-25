@@ -9,7 +9,7 @@
 [![Android](https://img.shields.io/badge/Android-7.0%2B-3DDC84?logo=android&logoColor=white)](https://developer.android.com)
 [![iOS](https://img.shields.io/badge/iOS-13%2B-000000?logo=apple&logoColor=white)](https://developer.apple.com)
 [![CI](https://github.com/dan-tech-academy/duo-comic-camera/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/dan-tech-academy/duo-comic-camera/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/Tests-32%20passing-brightgreen)](#-tests)
+[![Tests](https://img.shields.io/badge/Tests-43%20passing-brightgreen)](#-tests)
 [![License](https://img.shields.io/badge/License-MIT-yellow)](LICENSE)
 
 **Duo Comic Camera** chụp ảnh từ **camera sau + camera trước** trong một nhịp,
@@ -46,18 +46,22 @@ filter in-truyện-tranh, sticker POW!/BOOM! kéo-thả — rồi lưu hoặc sh
 - Cho phép **chụp lại từng slot** (cam sau / cam trước) bất cứ lúc nào
 - Tự nhận diện thiết bị thiếu camera trước/sau và báo bằng snackbar thay vì crash
 
-### 🖼 Custom Duo Layout — 8 kiểu ghép
+### 🖼 Custom Duo Layout — 10 kiểu ghép
 | Layout | Mô tả |
 |---|---|
 | **Chia dọc** | 2 panel trái/phải, kéo slider đổi tỉ lệ 25/75 ↔ 75/25 |
 | **Chia ngang** | 2 panel trên/dưới, cũng chỉnh được tỉ lệ |
 | **Chéo /** & **Chéo \\** | Cắt chéo kiểu splash page truyện tranh (clip theo đường chéo) |
 | **PiP × 4 góc** | Ảnh sau full-bleed, ảnh trước làm panel nhỏ lồng ở 1 trong 4 góc, có viền comic + shadow cứng |
+| **Truyện 3 ô** | Comic page: wide-shot trên full-width + 2 ô dưới (cam trước + crop ảnh sau), gutter trắng viền đen |
+| **Truyện 4 ô** | Comic page lưới 2×2 so le ảnh sau/trước — đúng chất một trang truyện tranh |
 
 Bonus trong tab Layout: nút **hoán đổi (swap)** vị trí 2 ảnh, và slider tỉ lệ live-update.
 
 ### 🎞 Comic Filters — 8 filter xử lý pixel thật
-Filter chạy trong **isolate riêng** (không lag UI), cache theo từng ảnh, áp cho cả 2 tấm cùng lúc:
+Filter chạy trong **isolate riêng** (không lag UI), cache theo từng ảnh, áp cho cả 2 tấm cùng lúc.
+Kèm **slider ĐỘ MẠNH** (10–100%): blend pixel-wise giữa ảnh gốc và ảnh đã filter ngay trong isolate,
+cache theo nấc 10% nên kéo slider mượt:
 
 | Filter | Hiệu ứng |
 |---|---|
@@ -86,6 +90,15 @@ Mỗi sticker trên canvas hỗ trợ full gesture:
 ### 🖼 Khung (Canvas Aspect)
 Đổi tỉ lệ khung xuất: **1:1** (Instagram), **4:5**, **3:4** — canvas re-layout live.
 
+### ↩️ Undo/Redo toàn bộ editor
+Mọi thao tác (layout, tỉ lệ, khung, swap, filter + intensity, sticker thêm/xoá/sửa/kéo/pinch) đều
+undo/redo được bằng nút trên AppBar — snapshot state, throttle gộp gesture liên tục, tối đa 60 bước.
+
+### 🎬 GIF Comic — export hoạt hình
+Nút **GIF!** render canvas thành **animated GIF 8 frame**: hiệu ứng zoom-punch luân phiên giữa
+2 panel kèm shake nhẹ — kiểu "hoạt hình truyện tranh". Encode thuần Dart (`image` package) trong
+isolate, lưu thẳng vào gallery, share được ngay.
+
 ### 💾 Export thật — WYSIWYG
 - Render lại **toàn bộ canvas** (ảnh đã filter + layout + sticker vector) qua `RepaintBoundary` ở độ phân giải ~2000px
 - **SAVE!** → lưu PNG vào album **`Pictures/DuoComic`** (Android) / Photos (iOS) qua [`gal`](https://pub.dev/packages/gal)
@@ -111,6 +124,11 @@ Mỗi sticker trên canvas hỗ trợ full gesture:
 |---|---|---|
 | <img src="docs/screenshots/07_frame_aspect.png" width="220"/> | <img src="docs/screenshots/08_custom_burst.png" width="220"/> | <img src="docs/screenshots/09_sticker_picker.png" width="220"/> |
 | Đổi aspect canvas live | "dinh" → **DINH** auto uppercase | Catalog 13 sticker + ô TỰ VIẾT! |
+
+| Truyện 3 ô | GIF comic | |
+|---|---|---|
+| <img src="docs/screenshots/10_comic_page3.png" width="220"/> | <img src="docs/screenshots/11_comic_gif.gif" width="220"/> | |
+| Comic page: wide-shot + 2 ô dưới | GIF 8 frame zoom-punch xuất thật từ app | |
 
 ---
 
