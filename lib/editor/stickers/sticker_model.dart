@@ -50,6 +50,15 @@ class StickerPlacement {
 
   static const double minScale = 0.3;
   static const double maxScale = 4.0;
+
+  /// Deep copy — dùng cho undo/redo snapshot.
+  StickerPlacement copy() => StickerPlacement(
+        id: id,
+        spec: spec.copyWith(),
+        center: center,
+        scale: scale,
+        rotation: rotation,
+      );
 }
 
 /// Catalogue sticker có sẵn trong hộp sticker.

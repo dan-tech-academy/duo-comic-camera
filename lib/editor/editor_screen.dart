@@ -104,6 +104,26 @@ class _EditorScreenState extends State<EditorScreen> {
         ),
         title: Text('DUO COMIC!', style: ComicTheme.actionWord(size: 30)),
         centerTitle: true,
+        actions: [
+          AnimatedBuilder(
+            animation: _controller,
+            builder: (context, _) => Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                IconButton(
+                  icon: const Icon(Icons.undo, color: ComicColors.ink),
+                  tooltip: 'Hoàn tác',
+                  onPressed: _controller.canUndo ? _controller.undo : null,
+                ),
+                IconButton(
+                  icon: const Icon(Icons.redo, color: ComicColors.ink),
+                  tooltip: 'Làm lại',
+                  onPressed: _controller.canRedo ? _controller.redo : null,
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
       body: HalftoneBackground(
         child: SafeArea(
@@ -450,10 +470,49 @@ class _FilterPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ListView(
-      scrollDirection: Axis.horizontal,
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+    final showIntensity = controller.filter != ComicFilterType.none;
+    return Column(
       children: [
+        if (showIntensity)
+          SizedBox(
+            height: 30,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Row(
+                children: [
+                  Text(
+                    'ĐỘ MẠNH ${(controller.filterIntensity * 100).round()}%',
+                    style: const TextStyle(
+                      fontFamily: ComicTheme.bodyFont,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 11,
+                    ),
+                  ),
+                  Expanded(
+                    child: SliderTheme(
+                      data: const SliderThemeData(
+                        trackHeight: 5,
+                        thumbShape: RoundSliderThumbShape(enabledThumbRadius: 7),
+                      ),
+                      child: Slider(
+                        value: controller.filterIntensity,
+                        min: 0.05,
+                        max: 1.0,
+                        activeColor: ComicColors.red,
+                        inactiveColor: ComicColors.paper,
+                        onChanged: controller.setFilterIntensity,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        Expanded(
+          child: ListView(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            children: [
         for (final filter in kComicFilters)
           GestureDetector(
             onTap: () => controller.setFilter(filter.type),
@@ -493,6 +552,9 @@ class _FilterPanel extends StatelessWidget {
               ),
             ),
           ),
+            ],
+          ),
+        ),
       ],
     );
   }
@@ -531,12 +593,7 @@ class _StickerPanel extends StatelessWidget {
               ),
               if (count > 0)
                 TextButton(
-                  onPressed: () {
-                    final ids = controller.stickers.map((s) => s.id).toList();
-                    for (final id in ids) {
-                      controller.removeSticker(id);
-                    }
-                  },
+                  onPressed: controller.clearStickers,
                   child: const Text(
                     'Xoá hết',
                     style: TextStyle(

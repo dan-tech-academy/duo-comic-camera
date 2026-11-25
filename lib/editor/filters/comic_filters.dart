@@ -88,11 +88,15 @@ class FilterJob {
     required this.bytes,
     required this.maxDim,
     required this.filter,
+    this.intensity = 1.0,
   });
 
   final Uint8List bytes;
   final int maxDim;
   final ComicFilterType filter;
+
+  /// 0..1 — độ mạnh của filter: blend alpha giữa ảnh gốc và ảnh đã filter.
+  final double intensity;
 }
 
 /// Kết quả xử lý: PNG bytes + kích thước ảnh sau bake/resize.
@@ -122,7 +126,28 @@ FilterResult processPhoto(FilterJob job) {
       interpolation: img.Interpolation.linear,
     );
   }
+  final preFilter = out.clone();
   out = applyComicFilter(out, job.filter);
+  final t = job.intensity.clamp(0.0, 1.0);
+  if (t < 1.0 && job.filter != ComicFilterType.none) {
+    // Blend pixel-wise giữa ảnh gốc (trước filter) và ảnh đã filter.
+    if (out.width != preFilter.width || out.height != preFilter.height) {
+      out = img.copyResize(out, width: preFilter.width, height: preFilter.height);
+    }
+    for (var y = 0; y < out.height; y++) {
+      for (var x = 0; x < out.width; x++) {
+        final a = preFilter.getPixel(x, y);
+        final b = out.getPixel(x, y);
+        out.setPixelRgb(
+          x,
+          y,
+          _clamp255(a.r + (b.r - a.r) * t),
+          _clamp255(a.g + (b.g - a.g) * t),
+          _clamp255(a.b + (b.b - a.b) * t),
+        );
+      }
+    }
+  }
   return FilterResult(
     pngBytes: img.encodePng(out),
     width: out.width,

@@ -9,9 +9,32 @@ typedef FilterRunner = Future<FilterResult> Function(FilterJob job);
 
 Future<FilterResult> defaultFilterRunner(FilterJob job) => compute(processPhoto, job);
 
+/// Snapshot toàn bộ state editor — cho undo/redo.
+class _EditorSnapshot {
+  _EditorSnapshot({
+    required this.layout,
+    required this.splitRatio,
+    required this.aspect,
+    required this.swapped,
+    required this.filter,
+    required this.intensity,
+    required this.stickers,
+    required this.selectedId,
+  });
+
+  final DuoLayout layout;
+  final double splitRatio;
+  final CanvasAspect aspect;
+  final bool swapped;
+  final ComicFilterType filter;
+  final double intensity;
+  final List<StickerPlacement> stickers;
+  final String? selectedId;
+}
+
 /// State của màn editor: layout duo, filter, sticker. Preview chạy filter
-/// pixel-level trong isolate và cache theo (ảnh, filter) nên chuyển filter
-/// đã xem là instant.
+/// pixel-level trong isolate và cache theo (ảnh, filter, intensity) nên
+/// chuyển filter đã xem là instant. Undo/redo theo snapshot (tối đa 60 bước).
 class EditorController extends ChangeNotifier {
   EditorController({
     required this.rearBytes,
@@ -31,7 +54,17 @@ class EditorController extends ChangeNotifier {
   CanvasAspect aspect = CanvasAspect.portrait;
   bool swapped = false;
   ComicFilterType filter = ComicFilterType.none;
+
+  /// Độ mạnh filter hiện tại (0..1). Chỉ áp khi filter != none.
+  double filterIntensity = 1.0;
   bool processing = false;
+
+  final List<_EditorSnapshot> _undo = [];
+  final List<_EditorSnapshot> _redo = [];
+  DateTime _lastHistoryPush = DateTime.fromMillisecondsSinceEpoch(0);
+
+  bool get canUndo => _undo.isNotEmpty;
+  bool get canRedo => _redo.isNotEmpty;
 
   final List<StickerPlacement> stickers = [];
   String? selectedStickerId;
@@ -59,9 +92,81 @@ class EditorController extends ChangeNotifier {
 
   Future<void> init() => _applyFilter(ComicFilterType.none);
 
-  String _key(bool rear, ComicFilterType f) => '${rear ? 'rear' : 'front'}_${f.name}';
+  String _key(bool rear, ComicFilterType f) =>
+      '${rear ? 'rear' : 'front'}_${f.name}_${(filterIntensity * 10).round()}';
 
-  Future<void> setFilter(ComicFilterType type) => _applyFilter(type);
+  // ---- Undo/redo ----
+
+  _EditorSnapshot _capture() => _EditorSnapshot(
+        layout: layout,
+        splitRatio: splitRatio,
+        aspect: aspect,
+        swapped: swapped,
+        filter: filter,
+        intensity: filterIntensity,
+        stickers: stickers.map((s) => s.copy()).toList(),
+        selectedId: selectedStickerId,
+      );
+
+  /// Push snapshot TRƯỚC mutation. [throttle] dành cho thao tác liên tục
+  /// (kéo slider/drag sticker): chỉ push nếu cách lần trước >= 400ms để
+  /// history không bị flood bởi từng pixel của gesture.
+  void _pushHistory({bool throttle = false}) {
+    if (throttle &&
+        DateTime.now().difference(_lastHistoryPush) <
+            const Duration(milliseconds: 400)) {
+      return;
+    }
+    _lastHistoryPush = DateTime.now();
+    _undo.add(_capture());
+    if (_undo.length > 60) _undo.removeAt(0);
+    _redo.clear();
+  }
+
+  Future<void> _restoreSnapshot(_EditorSnapshot s) async {
+    layout = s.layout;
+    splitRatio = s.splitRatio;
+    aspect = s.aspect;
+    swapped = s.swapped;
+    filterIntensity = s.intensity;
+    stickers
+      ..clear()
+      ..addAll(s.stickers.map((e) => e.copy()));
+    selectedStickerId = s.selectedId;
+    await _applyFilter(s.filter);
+    notifyListeners();
+  }
+
+  Future<void> undo() async {
+    if (_undo.isEmpty) return;
+    _redo.add(_capture());
+    await _restoreSnapshot(_undo.removeLast());
+  }
+
+  Future<void> redo() async {
+    if (_redo.isEmpty) return;
+    _undo.add(_capture());
+    await _restoreSnapshot(_redo.removeLast());
+  }
+
+  // ---- Filter ----
+
+  Future<void> setFilter(ComicFilterType type) {
+    if (type != filter) _pushHistory();
+    return _applyFilter(type);
+  }
+
+  void setFilterIntensity(double value) {
+    final v = value.clamp(0.05, 1.0);
+    if ((v - filterIntensity).abs() < 0.001) return;
+    _pushHistory(throttle: true);
+    filterIntensity = v;
+    if (filter != ComicFilterType.none) {
+      _applyFilter(filter);
+    } else {
+      notifyListeners();
+    }
+  }
 
   Future<void> _applyFilter(ComicFilterType type) async {
     filter = type;
@@ -76,10 +181,21 @@ class EditorController extends ChangeNotifier {
     processing = true;
     notifyListeners();
     try {
-      final results = await Future.wait([
-        filterRunner(FilterJob(bytes: rearBytes, maxDim: maxPreviewDim, filter: type)),
-        filterRunner(FilterJob(bytes: frontBytes, maxDim: maxPreviewDim, filter: type)),
-      ]);
+      final jobs = [
+        FilterJob(
+          bytes: rearBytes,
+          maxDim: maxPreviewDim,
+          filter: type,
+          intensity: filterIntensity,
+        ),
+        FilterJob(
+          bytes: frontBytes,
+          maxDim: maxPreviewDim,
+          filter: type,
+          intensity: filterIntensity,
+        ),
+      ];
+      final results = await Future.wait(jobs.map(filterRunner));
       _cache[_key(true, type)] = results[0];
       _cache[_key(false, type)] = results[1];
       // User có thể đã chuyển filter khác trong lúc chờ.
@@ -94,26 +210,31 @@ class EditorController extends ChangeNotifier {
   }
 
   void setLayout(DuoLayout value) {
+    if (value != layout) _pushHistory();
     layout = value;
     notifyListeners();
   }
 
   void setSplitRatio(double value) {
+    _pushHistory(throttle: true);
     splitRatio = value.clamp(0.25, 0.75);
     notifyListeners();
   }
 
   void setAspect(CanvasAspect value) {
+    if (value != aspect) _pushHistory();
     aspect = value;
     notifyListeners();
   }
 
   void swap() {
+    _pushHistory();
     swapped = !swapped;
     notifyListeners();
   }
 
   void addSticker(StickerSpec spec) {
+    _pushHistory();
     final placement = StickerPlacement(
       id: 'st_${++_stickerCounter}',
       spec: spec,
@@ -125,8 +246,17 @@ class EditorController extends ChangeNotifier {
   }
 
   void removeSticker(String id) {
+    if (stickers.any((s) => s.id == id)) _pushHistory();
     stickers.removeWhere((s) => s.id == id);
     if (selectedStickerId == id) selectedStickerId = null;
+    notifyListeners();
+  }
+
+  void clearStickers() {
+    if (stickers.isEmpty) return;
+    _pushHistory();
+    stickers.clear();
+    selectedStickerId = null;
     notifyListeners();
   }
 
@@ -136,6 +266,7 @@ class EditorController extends ChangeNotifier {
   }
 
   void moveSticker(String id, Offset center) {
+    _pushHistory(throttle: true);
     final s = stickers.firstWhere((e) => e.id == id);
     s.center = Offset(
       center.dx.clamp(-0.1, 1.1),
@@ -145,6 +276,7 @@ class EditorController extends ChangeNotifier {
   }
 
   void transformSticker(String id, {required double scale, required double rotation}) {
+    _pushHistory(throttle: true);
     final s = stickers.firstWhere((e) => e.id == id);
     s.scale = scale.clamp(StickerPlacement.minScale, StickerPlacement.maxScale);
     s.rotation = rotation;
@@ -152,6 +284,7 @@ class EditorController extends ChangeNotifier {
   }
 
   void setStickerText(String id, String text) {
+    _pushHistory();
     final s = stickers.firstWhere((e) => e.id == id);
     s.spec = s.spec.copyWith(text: text);
     notifyListeners();

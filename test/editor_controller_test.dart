@@ -115,4 +115,68 @@ void main() {
     expect(c.aspect, CanvasAspect.square);
     expect(notified, 2);
   });
+
+  test('undo/redo khôi phục layout, sticker và filter', () async {
+    final c = EditorController(
+      rearBytes: fakeJpeg(),
+      frontBytes: fakeJpeg(),
+      filterRunner: fakeRunner,
+    );
+    await c.init();
+    expect(c.canUndo, isFalse);
+
+    c.setLayout(DuoLayout.pipTopLeft);
+    expect(c.canUndo, isTrue);
+
+    c.addSticker(kStickerCatalog.first);
+    expect(c.stickers.length, 1);
+
+    await c.undo();
+    expect(c.stickers.length, 0);
+    expect(c.layout, DuoLayout.pipTopLeft);
+
+    await c.undo();
+    expect(c.layout, DuoLayout.splitVertical);
+    expect(c.canUndo, isFalse);
+
+    await c.redo();
+    expect(c.layout, DuoLayout.pipTopLeft);
+    await c.redo();
+    expect(c.stickers.length, 1);
+    expect(c.canRedo, isFalse);
+  });
+
+  test('undo khôi phục text sticker đã edit', () async {
+    final c = EditorController(
+      rearBytes: fakeJpeg(),
+      frontBytes: fakeJpeg(),
+      filterRunner: fakeRunner,
+    );
+    await c.init();
+    c.addSticker(kStickerCatalog.first);
+    final id = c.stickers.first.id;
+    c.setStickerText(id, 'MỚI!');
+    expect(c.stickers.first.spec.text, 'MỚI!');
+    await c.undo();
+    expect(c.stickers.first.spec.text, kStickerCatalog.first.text);
+  });
+
+  test('setFilterIntensity clamp + không crash khi filter none', () async {
+    final c = EditorController(
+      rearBytes: fakeJpeg(),
+      frontBytes: fakeJpeg(),
+      filterRunner: fakeRunner,
+    );
+    await c.init();
+    c.setFilterIntensity(0.4);
+    expect(c.filterIntensity, 0.4);
+    c.setFilterIntensity(2.0);
+    expect(c.filterIntensity, 1.0);
+    c.setFilterIntensity(0.0);
+    expect(c.filterIntensity, 0.05);
+    await c.setFilter(ComicFilterType.chill);
+    c.setFilterIntensity(0.6);
+    await Future.delayed(Duration.zero);
+    expect(c.filterIntensity, 0.6);
+  });
 }
