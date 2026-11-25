@@ -450,7 +450,7 @@ class _FilterPanel extends StatelessWidget {
           GestureDetector(
             onTap: () => controller.setFilter(filter.type),
             child: Container(
-              width: 88,
+              width: 100,
               margin: const EdgeInsets.symmetric(horizontal: 4),
               padding: const EdgeInsets.all(8),
               decoration: ComicTheme.panel(
@@ -465,7 +465,7 @@ class _FilterPanel extends StatelessWidget {
                   Text(
                     filter.label,
                     textAlign: TextAlign.center,
-                    style: ComicTheme.actionWord(size: 18),
+                    style: ComicTheme.actionWord(size: 16),
                   ),
                   const SizedBox(height: 4),
                   Expanded(
