@@ -116,7 +116,7 @@ void main() {
     expect(notified, 2);
   });
 
-  test('undo/redo khôi phục layout, sticker và filter', () async {
+  test('undo/redo khôi phục layout, sticker và filter+intensity', () async {
     final c = EditorController(
       rearBytes: fakeJpeg(),
       frontBytes: fakeJpeg(),
@@ -126,16 +126,25 @@ void main() {
     expect(c.canUndo, isFalse);
 
     c.setLayout(DuoLayout.pipTopLeft);
-    expect(c.canUndo, isTrue);
-
     c.addSticker(kStickerCatalog.first);
-    expect(c.stickers.length, 1);
+    await c.setFilter(ComicFilterType.chill);
+    c.setFilterIntensity(0.5);
+    await Future.delayed(Duration.zero);
+    expect(c.filter, ComicFilterType.chill);
+    expect(c.filterIntensity, 0.5);
 
-    await c.undo();
-    expect(c.stickers.length, 0);
+    await c.undo(); // bỏ intensity 0.5
+    expect(c.filterIntensity, 1.0);
+    expect(c.filter, ComicFilterType.chill);
+
+    await c.undo(); // bỏ filter chill
+    expect(c.filter, ComicFilterType.none);
+
+    await c.undo(); // bỏ sticker
+    expect(c.stickers, isEmpty);
     expect(c.layout, DuoLayout.pipTopLeft);
 
-    await c.undo();
+    await c.undo(); // bỏ layout
     expect(c.layout, DuoLayout.splitVertical);
     expect(c.canUndo, isFalse);
 
@@ -143,7 +152,58 @@ void main() {
     expect(c.layout, DuoLayout.pipTopLeft);
     await c.redo();
     expect(c.stickers.length, 1);
+    await c.redo();
+    expect(c.filter, ComicFilterType.chill);
+    await c.redo();
+    expect(c.filterIntensity, 0.5);
     expect(c.canRedo, isFalse);
+  });
+
+  test('redo bị vô hiệu kể cả khi throttle skip push', () async {
+    final c = makeController();
+    await c.init();
+    c.setLayout(DuoLayout.pipTopLeft);
+    await c.undo();
+    expect(c.canRedo, isTrue);
+    // 2 thao tác intensity liên tiếp trong <400ms: lần 2 bị throttle skip
+    // không push snapshot, nhưng redo vẫn phải bị clear vì state đã đổi.
+    c.setFilterIntensity(0.8);
+    c.setFilterIntensity(0.6);
+    expect(c.canRedo, isFalse);
+  });
+
+  test('intensity render đúng tại bucket để pixel khớp cache key', () async {
+    final intensities = <double>[];
+    Future<FilterResult> recordingRunner(FilterJob job) async {
+      intensities.add(job.intensity);
+      return fakeRunner(job);
+    }
+
+    final c = EditorController(
+      rearBytes: fakeJpeg(),
+      frontBytes: fakeJpeg(),
+      filterRunner: recordingRunner,
+    );
+    await c.init();
+    await c.setFilter(ComicFilterType.pop);
+    // 0.53 -> bucket 5 -> job chạy đúng ở 0.5 (không phải 0.53) để cache
+    // hit cho mọi giá trị trong cùng bucket trả về đúng pixels đã render.
+    c.setFilterIntensity(0.53);
+    await Future.delayed(Duration.zero);
+    await Future.delayed(Duration.zero);
+    expect(intensities.last, 0.5);
+
+    // 0.96 -> bucket 10 = bucket của 1.0 đã cache -> hit, không chạy job mới.
+    final jobsBefore = intensities.length;
+    c.setFilterIntensity(0.96);
+    await Future.delayed(Duration.zero);
+    expect(intensities.length, jobsBefore);
+
+    // Filter Gốc bucket cố định 0: đổi intensity không làm mất cache hit.
+    await c.setFilter(ComicFilterType.none);
+    c.setFilterIntensity(0.3);
+    await c.setFilter(ComicFilterType.none);
+    expect(intensities.where((v) => true).length, jobsBefore); // không job mới
   });
 
   test('undo khôi phục text sticker đã edit', () async {
