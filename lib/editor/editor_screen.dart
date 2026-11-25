@@ -38,6 +38,9 @@ class _EditorScreenState extends State<EditorScreen> {
   _ToolTab _tab = _ToolTab.layout;
   bool _exporting = false;
 
+  @visibleForTesting
+  EditorController get controller => _controller;
+
   @override
   void initState() {
     super.initState();
@@ -58,6 +61,10 @@ class _EditorScreenState extends State<EditorScreen> {
   Future<void> _runExport(Future<void> Function(Uint8List bytes) action, String doneMessage) async {
     if (_exporting) return;
     setState(() => _exporting = true);
+    // Ẩn chrome chọn sticker (khung xanh + badge) trước khi capture để
+    // UI edit không bị bake vào ảnh export; chờ 1 frame cho canvas render lại.
+    _controller.setExportMode(true);
+    await WidgetsBinding.instance.endOfFrame;
     try {
       final bytes = await Exporter.capturePng(_boundaryKey);
       await action(bytes);
@@ -71,6 +78,7 @@ class _EditorScreenState extends State<EditorScreen> {
         );
       }
     } finally {
+      _controller.setExportMode(false);
       if (mounted) setState(() => _exporting = false);
     }
   }
