@@ -86,10 +86,11 @@ class _StickerViewState extends State<_StickerView> {
     }
   }
 
-  bool get _isBubble => const {
+  bool get _hasEditableText => const {
         StickerKind.bubbleRect,
         StickerKind.bubbleOval,
         StickerKind.cloud,
+        StickerKind.burst,
       }.contains(placement.spec.kind);
 
   Future<void> _editText() async {
@@ -130,7 +131,11 @@ class _StickerViewState extends State<_StickerView> {
       ),
     );
     if (result != null) {
-      controller.setStickerText(placement.id, result);
+      // Burst là action word kiểu comic → auto uppercase cho đúng chất.
+      final text = placement.spec.kind == StickerKind.burst
+          ? result.toUpperCase()
+          : result;
+      controller.setStickerText(placement.id, text);
     }
   }
 
@@ -161,7 +166,7 @@ class _StickerViewState extends State<_StickerView> {
                   onTap: () => widget.controller.removeSticker(placement.id),
                 ),
               ),
-              if (_isBubble)
+              if (_hasEditableText)
                 Positioned(
                   top: -4,
                   left: -4,

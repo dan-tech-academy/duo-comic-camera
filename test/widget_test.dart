@@ -104,6 +104,23 @@ void main() {
     expect(find.byIcon(Icons.close), findsOneWidget);
   });
 
+  testWidgets('burst tự viết: gõ text, auto uppercase, thả vào canvas', (tester) async {
+    await tester.pumpWidget(buildEditor());
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Sticker'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('MỞ HỘP STICKER!'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('TỰ VIẾT!'));
+    await tester.pumpAndSettle();
+    expect(find.text('Viết gì đi!'), findsOneWidget);
+    await tester.enterText(find.byType(TextField), 'đỉnh quá');
+    await tester.tap(find.text('OK!'));
+    await tester.pumpAndSettle();
+    expect(find.text('1 sticker'), findsOneWidget);
+    expect(find.text('ĐỈNH QUÁ'), findsOneWidget);
+  });
+
   testWidgets('đổi khung aspect', (tester) async {
     await tester.pumpWidget(buildEditor());
     await tester.pumpAndSettle();
