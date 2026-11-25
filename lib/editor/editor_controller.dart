@@ -62,6 +62,9 @@ class EditorController extends ChangeNotifier {
   final List<_EditorSnapshot> _undo = [];
   final List<_EditorSnapshot> _redo = [];
   DateTime _lastHistoryPush = DateTime.fromMillisecondsSinceEpoch(0);
+  String? _lastThrottledOp;
+  String? _inFlightKey;
+  int _processingCount = 0;
 
   bool get canUndo => _undo.isNotEmpty;
   bool get canRedo => _redo.isNotEmpty;
@@ -92,8 +95,13 @@ class EditorController extends ChangeNotifier {
 
   Future<void> init() => _applyFilter(ComicFilterType.none);
 
+  /// Bucket intensity 0..10 cho cache key + render. Filter Gốc bỏ qua
+  /// intensity trong processPhoto nên bucket cố định 0 để cache hit xuyên suốt.
+  int _bucket(ComicFilterType f) =>
+      f == ComicFilterType.none ? 0 : (filterIntensity * 10).round();
+
   String _key(bool rear, ComicFilterType f) =>
-      '${rear ? 'rear' : 'front'}_${f.name}_${(filterIntensity * 10).round()}';
+      '${rear ? 'rear' : 'front'}_${f.name}_${_bucket(f)}';
 
   // ---- Undo/redo ----
 
@@ -109,18 +117,21 @@ class EditorController extends ChangeNotifier {
       );
 
   /// Push snapshot TRƯỚC mutation. [throttle] dành cho thao tác liên tục
-  /// (kéo slider/drag sticker): chỉ push nếu cách lần trước >= 400ms để
-  /// history không bị flood bởi từng pixel của gesture.
-  void _pushHistory({bool throttle = false}) {
+  /// (kéo slider/drag sticker): chỉ push nếu cùng loại thao tác [op] và cách
+  /// lần trước >= 400ms để history không bị flood bởi từng pixel của gesture.
+  /// Redo luôn bị clear kể cả khi skip — mọi edit mới đều vô hiệu redo.
+  void _pushHistory({bool throttle = false, String? op}) {
+    _redo.clear();
     if (throttle &&
+        op == _lastThrottledOp &&
         DateTime.now().difference(_lastHistoryPush) <
             const Duration(milliseconds: 400)) {
       return;
     }
+    _lastThrottledOp = throttle ? op : null;
     _lastHistoryPush = DateTime.now();
     _undo.add(_capture());
     if (_undo.length > 60) _undo.removeAt(0);
-    _redo.clear();
   }
 
   Future<void> _restoreSnapshot(_EditorSnapshot s) async {
@@ -159,7 +170,7 @@ class EditorController extends ChangeNotifier {
   void setFilterIntensity(double value) {
     final v = value.clamp(0.05, 1.0);
     if ((v - filterIntensity).abs() < 0.001) return;
-    _pushHistory(throttle: true);
+    _pushHistory(throttle: true, op: 'intensity');
     filterIntensity = v;
     if (filter != ComicFilterType.none) {
       _applyFilter(filter);
@@ -170,6 +181,7 @@ class EditorController extends ChangeNotifier {
 
   Future<void> _applyFilter(ComicFilterType type) async {
     filter = type;
+    final bucket = _bucket(type);
     final rearCached = _cache[_key(true, type)];
     final frontCached = _cache[_key(false, type)];
     if (rearCached != null && frontCached != null) {
@@ -178,33 +190,42 @@ class EditorController extends ChangeNotifier {
       notifyListeners();
       return;
     }
+    // Job y hệt đang chạy rồi — không spawn thêm isolate trong cùng bucket.
+    final requestKey = '${type.name}_$bucket';
+    if (_inFlightKey == requestKey) return;
+    _inFlightKey = requestKey;
+    _processingCount++;
     processing = true;
     notifyListeners();
     try {
+      // Render đúng ở mức bucket để pixel trong cache luôn khớp key.
+      final intensity = type == ComicFilterType.none ? 1.0 : bucket / 10;
       final jobs = [
         FilterJob(
           bytes: rearBytes,
           maxDim: maxPreviewDim,
           filter: type,
-          intensity: filterIntensity,
+          intensity: intensity,
         ),
         FilterJob(
           bytes: frontBytes,
           maxDim: maxPreviewDim,
           filter: type,
-          intensity: filterIntensity,
+          intensity: intensity,
         ),
       ];
       final results = await Future.wait(jobs.map(filterRunner));
       _cache[_key(true, type)] = results[0];
       _cache[_key(false, type)] = results[1];
-      // User có thể đã chuyển filter khác trong lúc chờ.
-      if (filter == type) {
+      // User có thể đã chuyển filter/intensity khác trong lúc chờ.
+      if (filter == type && _bucket(type) == bucket) {
         _rearResult = results[0];
         _frontResult = results[1];
       }
     } finally {
-      processing = false;
+      if (_inFlightKey == requestKey) _inFlightKey = null;
+      _processingCount--;
+      processing = _processingCount > 0;
       notifyListeners();
     }
   }
@@ -216,7 +237,7 @@ class EditorController extends ChangeNotifier {
   }
 
   void setSplitRatio(double value) {
-    _pushHistory(throttle: true);
+    _pushHistory(throttle: true, op: 'split');
     splitRatio = value.clamp(0.25, 0.75);
     notifyListeners();
   }
@@ -266,7 +287,7 @@ class EditorController extends ChangeNotifier {
   }
 
   void moveSticker(String id, Offset center) {
-    _pushHistory(throttle: true);
+    _pushHistory(throttle: true, op: 'move');
     final s = stickers.firstWhere((e) => e.id == id);
     s.center = Offset(
       center.dx.clamp(-0.1, 1.1),
@@ -276,7 +297,7 @@ class EditorController extends ChangeNotifier {
   }
 
   void transformSticker(String id, {required double scale, required double rotation}) {
-    _pushHistory(throttle: true);
+    _pushHistory(throttle: true, op: 'transform');
     final s = stickers.firstWhere((e) => e.id == id);
     s.scale = scale.clamp(StickerPlacement.minScale, StickerPlacement.maxScale);
     s.rotation = rotation;
