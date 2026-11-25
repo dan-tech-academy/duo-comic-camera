@@ -242,4 +242,21 @@ void main() {
     await Future.delayed(Duration.zero);
     expect(c.filterIntensity, 0.6);
   });
+
+  test('undo tách biệt giữa 2 sticker khác nhau khi drag liên tiếp', () async {
+    final c = makeController();
+    await c.init();
+    c.addSticker(kStickerCatalog.first);
+    final idA = c.stickers.first.id;
+    c.addSticker(kStickerCatalog[1]);
+    final idB = c.stickers.last.id;
+    // Drag A xong drag B ngay trong <400ms: snapshot của B không được skip
+    // vì op key gồm sticker id — undo chỉ revert B, không gộp cả A.
+    c.moveSticker(idA, const Offset(0.2, 0.2));
+    c.moveSticker(idB, const Offset(0.8, 0.8));
+    await c.undo();
+    expect(c.stickers.firstWhere((s) => s.id == idB).center,
+        const Offset(0.5, 0.5));
+    expect(c.stickers.firstWhere((s) => s.id == idA).center.dx, 0.2);
+  });
 }

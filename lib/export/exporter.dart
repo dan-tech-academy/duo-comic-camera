@@ -32,28 +32,28 @@ class Exporter {
     return byteData.buffer.asUint8List();
   }
 
-  static Future<File> _writeTemp(Uint8List bytes) async {
+  static Future<File> _writeTemp(Uint8List bytes, {String ext = '.png'}) async {
     final dir = await getTemporaryDirectory();
     final file = File(
-      '${dir.path}/duo_comic_${DateTime.now().millisecondsSinceEpoch}.png',
+      '${dir.path}/duo_comic_${DateTime.now().millisecondsSinceEpoch}$ext',
     );
     return file.writeAsBytes(bytes, flush: true);
   }
 
   /// Lưu vào gallery. Throw [GalException] nếu user từ chối permission.
-  static Future<void> saveToGallery(Uint8List bytes) async {
+  static Future<void> saveToGallery(Uint8List bytes, {String ext = '.png'}) async {
     if (!await Gal.hasPermission()) {
       final granted = await Gal.requestPermission();
       if (!granted) {
         throw StateError('Không có quyền lưu ảnh vào thư viện');
       }
     }
-    final file = await _writeTemp(bytes);
+    final file = await _writeTemp(bytes, ext: ext);
     await Gal.putImage(file.path, album: 'DuoComic');
   }
 
-  static Future<void> share(Uint8List bytes) async {
-    final file = await _writeTemp(bytes);
+  static Future<void> share(Uint8List bytes, {String ext = '.png'}) async {
+    final file = await _writeTemp(bytes, ext: ext);
     await SharePlus.instance.share(
       ShareParams(
         files: [XFile(file.path)],

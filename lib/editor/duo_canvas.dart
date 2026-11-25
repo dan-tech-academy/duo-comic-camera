@@ -58,6 +58,11 @@ class DuoCanvas extends StatelessWidget {
                         clip: regions.secondClip,
                         bytes: second.pngBytes,
                       ),
+                    for (final (rect, useFirst) in regions.extraCells)
+                      _PhotoRegion(
+                        rect: rect,
+                        bytes: useFirst ? first.pngBytes : second.pngBytes,
+                      ),
                     if (regions.divider != null)
                       Positioned.fill(
                         child: CustomPaint(
@@ -185,7 +190,11 @@ class _PanelFramePainter extends CustomPainter {
       ..color = ComicColors.ink
       ..style = PaintingStyle.stroke
       ..strokeWidth = 3;
-    for (final rect in [regions.firstRect, regions.secondRect]) {
+    for (final rect in [
+      regions.firstRect,
+      regions.secondRect,
+      for (final (r, _) in regions.extraCells) r,
+    ]) {
       canvas.drawRect(rect.deflate(1.5), paint);
     }
   }

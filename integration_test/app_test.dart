@@ -1,6 +1,5 @@
 import 'package:duo_comic_camera/editor/editor_screen.dart';
 import 'package:duo_comic_camera/main.dart' as app;
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 
@@ -10,7 +9,7 @@ import 'package:integration_test/integration_test.dart';
 ///
 /// Trước khi chạy: adb shell pm grant com.dantech0xff.duo_comic_camera \
 ///   android.permission.CAMERA
-/// flutter test integration_test -d <device>
+/// flutter test integration_test -d \<device\>
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 

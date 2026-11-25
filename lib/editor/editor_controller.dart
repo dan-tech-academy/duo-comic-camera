@@ -300,9 +300,10 @@ class EditorController extends ChangeNotifier {
   }
 
   void moveSticker(String id, Offset center) {
-    // Scale gesture xen kẽ move+transform mỗi frame — cùng op key 'sticker'
-    // để throttle không bị bypass bởi việc luân phiên 2 hàm.
-    _pushHistory(throttle: true, op: 'sticker');
+    // Scale gesture xen kẽ move+transform mỗi frame — op key gồm sticker id
+    // để throttle không bị bypass bởi việc luân phiên 2 hàm, nhưng vẫn tách
+    // biệt giữa 2 sticker khác nhau (undo không gộp chéo sticker).
+    _pushHistory(throttle: true, op: 'sticker:$id');
     final s = stickers.firstWhere((e) => e.id == id);
     s.center = Offset(
       center.dx.clamp(-0.1, 1.1),
@@ -312,7 +313,7 @@ class EditorController extends ChangeNotifier {
   }
 
   void transformSticker(String id, {required double scale, required double rotation}) {
-    _pushHistory(throttle: true, op: 'sticker');
+    _pushHistory(throttle: true, op: 'sticker:$id');
     final s = stickers.firstWhere((e) => e.id == id);
     s.scale = scale.clamp(StickerPlacement.minScale, StickerPlacement.maxScale);
     s.rotation = rotation;
