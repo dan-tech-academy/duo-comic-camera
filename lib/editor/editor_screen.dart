@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 
 import '../export/exporter.dart';
+import '../export/gif_maker.dart';
 import '../theme/comic_theme.dart';
 import 'duo_canvas.dart';
 import 'editor_controller.dart';
@@ -64,6 +65,13 @@ class _EditorScreenState extends State<EditorScreen> {
     // Ẩn chrome chọn sticker (khung xanh + badge) trước khi capture để
     // UI edit không bị bake vào ảnh export; chờ 1 frame cho canvas render lại.
     _controller.setExportMode(true);
+    // Nếu filter đang xử lý (ví dụ vừa kéo slider intensity), chờ xong để
+    // capture đúng pixels mới nhất — không export ảnh của strength cũ.
+    var waited = 0;
+    while (_controller.processing && waited < 300) {
+      await WidgetsBinding.instance.endOfFrame;
+      waited++;
+    }
     await WidgetsBinding.instance.endOfFrame;
     try {
       final bytes = await Exporter.capturePng(_boundaryKey);
@@ -92,6 +100,23 @@ class _EditorScreenState extends State<EditorScreen> {
         Exporter.share,
         'ĐÃ MỞ SHARE SHEET!',
       );
+
+  /// Capture canvas → encode GIF comic (zoom-punch luân phiên 2 panel) → lưu gallery.
+  Future<void> _saveGif() => _runExport((pngBytes) async {
+        final regions = computeRegions(
+          const Size(1000, 1000),
+          _controller.layout,
+          _controller.splitRatio,
+        );
+        final fa = regions.firstRect.center;
+        final fb = regions.secondRect.center;
+        final gif = await encodeComicGif(GifJob(
+          pngBytes: pngBytes,
+          focusA: (fa.dx / 1000, fa.dy / 1000),
+          focusB: (fb.dx / 1000, fb.dy / 1000),
+        ));
+        await Exporter.saveToGallery(gif, ext: '.gif');
+      }, 'GIF COMIC ĐÃ LƯU!');
 
   @override
   Widget build(BuildContext context) {
@@ -185,14 +210,25 @@ class _EditorScreenState extends State<EditorScreen> {
                         child: ComicButton(
                           label: 'Save!',
                           color: ComicColors.yellow,
+                          fontSize: 17,
                           onPressed: _exporting ? null : _save,
                         ),
                       ),
-                      const SizedBox(width: 14),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: ComicButton(
+                          label: 'GIF!',
+                          color: ComicColors.pink,
+                          fontSize: 17,
+                          onPressed: _exporting ? null : _saveGif,
+                        ),
+                      ),
+                      const SizedBox(width: 10),
                       Expanded(
                         child: ComicButton(
                           label: 'Share!',
                           color: ComicColors.cyan,
+                          fontSize: 17,
                           onPressed: _exporting ? null : _share,
                         ),
                       ),
