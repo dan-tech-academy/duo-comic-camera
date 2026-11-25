@@ -9,7 +9,7 @@ import 'package:integration_test/integration_test.dart';
 ///
 /// Trước khi chạy: adb shell pm grant com.dantech0xff.duo_comic_camera \
 ///   android.permission.CAMERA
-/// flutter test integration_test -d \<device\>
+/// flutter test integration_test -d `<device>`
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
