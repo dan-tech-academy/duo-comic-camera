@@ -8,7 +8,7 @@
 [![Dart](https://img.shields.io/badge/Dart-3.13-0175C2?logo=dart&logoColor=white)](https://dart.dev)
 [![Android](https://img.shields.io/badge/Android-7.0%2B-3DDC84?logo=android&logoColor=white)](https://developer.android.com)
 [![iOS](https://img.shields.io/badge/iOS-13%2B-000000?logo=apple&logoColor=white)](https://developer.apple.com)
-[![CI](https://github.com/dan-tech-academy/duo-comic-camera/actions/workflows/ci.yml/badge.svg)](https://github.com/dan-tech-academy/duo-comic-camera/actions/workflows/ci.yml)
+[![CI](https://github.com/dan-tech-academy/duo-comic-camera/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/dan-tech-academy/duo-comic-camera/actions/workflows/ci.yml)
 [![Tests](https://img.shields.io/badge/Tests-32%20passing-brightgreen)](#-tests)
 [![License](https://img.shields.io/badge/License-MIT-yellow)](LICENSE)
 
